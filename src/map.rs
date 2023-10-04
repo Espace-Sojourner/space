@@ -1,12 +1,11 @@
 use std::cmp::{min, max};
 
 use rand::Rng;
-use rltk::RGB;
-use crate::coordinate;
+use rltk::{RGB, Algorithm2D, Point, BaseMap};
 
 use super::coordinate::Coordinate;
 use super::rectangle::Rectangle;
-use super::tile::MapTile;
+use super::map_tile::MapTile;
 
 
 pub struct Map
@@ -35,14 +34,14 @@ impl Map
                         new_tile = MapTile::new(rltk::to_cp437('#'), 
                             RGB::from_f32(0.5, 0.5, 0.5),
                             RGB::named(rltk::BLACK), 
-                            false);    
+                            false, false);    
                     }
                     else
                     {
                         new_tile = MapTile::new(rltk::to_cp437('.'), 
                                 RGB::from_f32(0.1, 0.1, 0.1),
                                 RGB::named(rltk::BLACK), 
-                                true);    
+                                true, false);    
                     }
                     tiles[x][y][z] = Some(new_tile);
                 }
@@ -56,7 +55,7 @@ impl Map
     }
 
     /// Makes a map consisting of random rooms and corridors connecting them
-    pub fn rooms_and_corridors_map(number_of_rooms: usize, min_room_size: usize, max_room_size: usize,  map_size: Coordinate) -> Map
+    pub fn rooms_and_corridors_map(number_of_rooms: usize, min_room_size: usize, max_room_size: usize,  map_size: Coordinate) -> (Map,  Vec<Rectangle>)
     {
         const MAX_ATTEMPTS: usize = 100;
         let mut tiles: Vec<Vec<Vec<Option<MapTile>>>> = vec![vec![vec![None; map_size.z]; map_size.y]; map_size.x];
@@ -126,7 +125,7 @@ impl Map
 
         add_walls(&mut map);
 
-        map
+        (map, rooms)
     }
 
     pub fn get(&self, coordinate: Coordinate) -> Option<MapTile>
@@ -144,6 +143,45 @@ impl Map
             None
         }
     }
+}
+
+impl Algorithm2D for Map
+{
+    fn dimensions(&self) -> rltk::Point 
+    {
+        Point::new(self.map_size.x, self.map_size.y)
+    }
+}
+
+impl BaseMap for Map
+{
+    fn is_opaque(&self, target_idx: usize) -> bool 
+    {
+        let target_coordinate = idx_to_cartisian(target_idx, self.map_size);
+        let target_tile = self.get(target_coordinate);
+
+        match target_tile 
+        {
+            Some(tile) => 
+            {
+                tile.opaque
+            }
+            _ =>
+            {
+                false
+            }
+        }
+    }
+}
+
+pub fn idx_to_cartisian(idx: usize, map_size: Coordinate) -> Coordinate
+{
+    let mut coordinate = Coordinate::new(0, 0, 0);
+
+    coordinate.x = idx % map_size.x;
+    coordinate.y = idx / map_size.x;
+
+    coordinate
 }
 
 pub fn get_tile_neighbors(target_tile: Coordinate, map: &Map) -> (Vec<Option<MapTile>>, Vec<Coordinate>)
@@ -199,7 +237,7 @@ fn add_room_to_map(room: &Rectangle, tiles: &mut Vec<Vec<Vec<Option<MapTile>>>>)
             tiles[x][y][room.corner_one.z] = Some(MapTile::new(rltk::to_cp437('.'), 
                                 RGB::from_f32(0.3, 0.3, 0.3),
                                 RGB::named(rltk::BLACK), 
-                                true));    
+                                true, false));    
         }
     }
 }
@@ -211,7 +249,7 @@ fn add_horizontal_corridor(origin: Coordinate, target: Coordinate, tiles: &mut V
         tiles[x][origin.y][origin.z] = Some(MapTile::new(rltk::to_cp437('.'), 
                             RGB::from_f32(0.3, 0.3, 0.3),
                             RGB::named(rltk::BLACK), 
-                            true)); 
+                            true, false)); 
     }
 }
 
@@ -222,7 +260,7 @@ fn add_vertical_corridor(origin: Coordinate, target: Coordinate, tiles: &mut Vec
         tiles[target.x][y][origin.z] = Some(MapTile::new(rltk::to_cp437('.'), 
                             RGB::from_f32(0.3, 0.3, 0.3),
                             RGB::named(rltk::BLACK), 
-                            true)); 
+                            true, false)); 
     }
 }
 
@@ -254,7 +292,7 @@ pub fn add_walls(map: &mut Map)
                                     map.tiles[coordinate.x][coordinate.y][coordinate.z] = Some(MapTile::new(rltk::to_cp437('#'), 
                                     RGB::from_f32(0.5, 0.5, 0.5),
                                     RGB::named(rltk::BLACK), 
-                                    false)); 
+                                    false, true)); 
                                 }
                                 _ => (),
                             }

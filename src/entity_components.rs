@@ -1,17 +1,8 @@
 
-use rltk::RGB;
+use rltk::{RGB, Point};
 use specs_derive::Component;
 use specs::prelude::*;
 
-
-//Position
-#[derive(Component, Clone, Copy, Debug)]
-pub struct Coordinate
-{
-    pub x: usize,
-    pub y: usize,
-    pub z: usize
-}
 
 //Renderable
 #[derive(Component)]
@@ -25,5 +16,12 @@ pub struct Renderable
 //Player
 #[derive(Component)]
 pub struct Player {}
+
+#[derive(Component)]
+pub struct Viewshed
+{
+    pub visible_tiles: Vec<Point>,
+    pub range: i32
+}
 
 

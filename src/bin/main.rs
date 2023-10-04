@@ -1,9 +1,9 @@
 extern crate lib;
-use lib::entity_components::*;
-use lib::coordinate::Coordinate;
+use lib::{entity_components::*, visibility_system::VisibilitySystem, coordinate::Coordinate};
+
 use lib::map::Map;
 
-use rltk::{GameState, Rltk, RGB, VirtualKeyCode};
+use rltk::{GameState, Rltk, RGB, VirtualKeyCode, Point};
 use specs::prelude::*;
 use std::cmp::{max, min};
 
@@ -18,7 +18,10 @@ impl State
 {
     fn run_systems(&mut self)
     {
+        let mut visibility_system = VisibilitySystem{};
 
+        visibility_system.run_now(&self.entity_system);
+        self.entity_system.maintain();
     }
 }
 
@@ -31,21 +34,19 @@ impl GameState for State
 
         player_input(self, context);
 
-        let coordinates = self.entity_system.read_storage::<Coordinate>();
+        let coordinates = self.entity_system.write_storage::<Coordinate>();
         let renderables = self.entity_system.read_storage::<Renderable>(); 
-
-        let map = self.entity_system.fetch::<Map>();
-
-        let players = self.entity_system.write_storage::<Player>();
-
-        let mut player_coordinate = &Coordinate { x:0, y: 0, z: 0 };
     
+        let players = self.entity_system.write_storage::<Player>();
+        let mut camera_z: usize = 0;
+
         for (_player, coordinate) in (&players, &coordinates).join() 
         {
-            player_coordinate = coordinate;
+            camera_z = coordinate.z;
         }
+        drop(players);
 
-        draw_map(&map, self.map_size, context, player_coordinate.z);
+        draw_map(&self.entity_system, context, camera_z);
 
         for (coordinate, renderable) in (&coordinates, &renderables).join()
         {
@@ -78,15 +79,19 @@ fn main() -> rltk::BError
     
     register_components(&mut game_state);
 
-    game_state.entity_system.insert(Map::rooms_and_corridors_map(20,5, 10, game_state.map_size));
+    let (map, rooms) = Map::rooms_and_corridors_map(20,5, 10, game_state.map_size);
+    let player_start_coordinate = rooms[0].center();
+
+    game_state.entity_system.insert(map);
     //Test player
     game_state.entity_system.create_entity()
                             .with(Player{})
-                            .with(Coordinate { x: 40, y: 25, z: 0 })
+                            .with(player_start_coordinate)
                             .with(Renderable { glyph: rltk::to_cp437('@'), 
-                                                 foreground_color: RGB::named(rltk::YELLOW), 
-                                                 background_color: RGB::named(rltk::BLACK)})
-                              .build();
+                                                foreground_color: RGB::named(rltk::YELLOW), 
+                                                background_color: RGB::named(rltk::BLACK)})
+                            .with(Viewshed { visible_tiles: Vec::new(), range: 8})
+                            .build();
 
                         
     rltk::main_loop(context, game_state)
@@ -111,8 +116,8 @@ fn try_move_player(delta_x: i32, delta_y: i32, game_state: &mut State)
             }
             None => 
             {
-                //coordinate.x = min(game_state.map_size.x - 1 , max(0, target_coordinate.x));
-                //coordinate.y = min(game_state.map_size.y - 1, max(0, target_coordinate.y));
+                coordinate.x = min(game_state.map_size.x - 1 , max(0, target_coordinate.x));
+                coordinate.y = min(game_state.map_size.y - 1, max(0, target_coordinate.y));
             }
         }
     }
@@ -137,23 +142,37 @@ fn player_input(game_state: &mut State, context: &mut Rltk)
     }
 }
 
-fn draw_map(map: &Map, map_size: Coordinate, context: &mut Rltk, camera_z: usize)
-{
-    for x in 0..map_size.x
+fn draw_map(entity_system: &World, context: &mut Rltk, camera_z: usize)
+{ 
+    let mut viewsheds = entity_system.write_storage::<Viewshed>();
+    let mut players = entity_system.write_storage::<Player>();
+    let map = entity_system.fetch::<Map>();
+
+    for (_players, viewshed) in (&mut players, &mut viewsheds).join()
     {
-        for y in 0..map_size.y
+
+        for x in 0..map.tiles.len() - 1
         {
-
-            let tile = map.tiles[x][y][camera_z];
-
-            match tile
+            for y in 0..map.tiles[x].len() - 1
             {
-                Some(tile) => context.set(x, y, tile.foreground_color, tile.background_color, tile.glyph),
-                None => (),
+                let point = Point::new(x, y);
+
+                if viewshed.visible_tiles.contains(&point)
+                {
+                    let tile = map.tiles[x][y][camera_z];
+                    
+                    match tile
+                    {
+                        Some(tile) =>
+                        {
+                            context.set(x, y, tile.foreground_color, tile.background_color, tile.glyph);
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
     }
-    
 }
 
 fn register_components(game_state: &mut State)
@@ -161,4 +180,5 @@ fn register_components(game_state: &mut State)
     game_state.entity_system.register::<Coordinate>();
     game_state.entity_system.register::<Renderable>();
     game_state.entity_system.register::<Player>();
+    game_state.entity_system.register::<Viewshed>();
 }
