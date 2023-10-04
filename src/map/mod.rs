@@ -1,25 +1,65 @@
-use super::tile::TileType;
+use rltk::RGB;
+use super::entity_components::Coordinate;
+use super::tile::MapTile;
 
-pub fn cartesian_to_index(x: i32, y: i32, map_width: usize) -> usize
+pub struct Map
 {
-    (y as usize * map_width) + x as usize
+    pub tiles: Vec<Vec<Vec<Option<MapTile>>>>,
+    pub map_size: Coordinate
 }
 
-pub fn new_map(width: usize, height: usize) -> Vec<TileType>
+impl Map
 {
-    let mut map = vec![TileType::Floor; width*height];
-
-    for x in 0..width
+    pub fn new(map_size: Coordinate) -> Map
     {
-        map[cartesian_to_index(x as i32, 0, width)] = TileType::Wall;
-        map[cartesian_to_index(x as i32, (height - 1) as i32, width)] = TileType::Wall;
+        let mut tiles: Vec<Vec<Vec<Option<MapTile>>>> = vec![vec![vec![None; map_size.z]; map_size.y]; map_size.x];
+
+        for x in 0..map_size.x
+        {
+            for y in 0..map_size.y
+            {
+                for z in 0..map_size.z
+                {
+                    let new_tile: MapTile;
+
+                    if x == 0 || y == 0 || x == map_size.x - 1 || y == map_size.y - 1 
+                    {
+                        new_tile = MapTile::new(rltk::to_cp437('#'), 
+                            RGB::from_f32(0.5, 0.5, 0.5),
+                            RGB::named(rltk::BLACK), 
+                            false);    
+                    }
+                    else
+                    {
+                        new_tile = MapTile::new(rltk::to_cp437('.'), 
+                                RGB::from_f32(0.1, 0.1, 0.1),
+                                RGB::named(rltk::BLACK), 
+                                true);    
+                    }
+                    tiles[x][y][z] = Some(new_tile);
+                }
+            }
+        }
+        Map
+        {
+            tiles,
+            map_size
+        }
     }
 
-    for y in 0..height
+    pub fn get(&self, coordinate: Coordinate) -> Option<MapTile>
     {
-        map[cartesian_to_index(0, y as i32, width)] = TileType::Wall;
-        map[cartesian_to_index((width - 1) as i32, y as i32, width)] = TileType::Wall;
+        if coordinate.x < self.map_size.x && coordinate.y < self.map_size.y && coordinate.z < self.map_size.z
+        {
+            match &self.tiles[coordinate.x][coordinate.y][coordinate.z]
+            {
+                Some(target_tile) => return Some(*target_tile),
+                None => return None,
+            }
+        }
+        else
+        {
+            None
+        }
     }
-
-    map
 }

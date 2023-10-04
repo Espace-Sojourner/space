@@ -1,9 +1,9 @@
 extern crate lib;
 use lib::entity_components::*;
 
-use lib::map::{cartesian_to_index, new_map};
+use lib::map::Map;
 
-use lib::tile::TileType;
+use lib::tile::MapTile;
 use rltk::{GameState, Rltk, RGB, VirtualKeyCode, Tile};
 use specs::prelude::*;
 use std::cmp::{max, min};
@@ -13,8 +13,7 @@ use specs_derive::Component;
 struct State 
 {
     entity_system: World,
-    map_width: usize,
-    map_height: usize,
+    map_size: Coordinate, 
 }
 
 impl State
@@ -34,17 +33,25 @@ impl GameState for State
 
         player_input(self, context);
 
-        let positions = self.entity_system.read_storage::<Position>();
+        let coordinates = self.entity_system.read_storage::<Coordinate>();
         let renderables = self.entity_system.read_storage::<Renderable>(); 
 
-        let map = self.entity_system.fetch::<Vec<TileType>>();
-        let map_width = self.map_width;
+        let map = self.entity_system.fetch::<Map>();
 
-        draw_map(&map, &map_width, context);
+        let players = self.entity_system.write_storage::<Player>();
 
-        for (position, renderable) in (&positions, &renderables).join()
+        let mut player_coordinate = &Coordinate { x:0, y: 0, z: 0 };
+    
+        for (_player, coordinate) in (&players, &coordinates).join() 
         {
-            context.set(position.x, position.y, renderable.foreground_color, renderable.background_color, renderable.glyph);
+            player_coordinate = coordinate;
+        }
+
+        draw_map(&map, self.map_size, context, player_coordinate.z);
+
+        for (coordinate, renderable) in (&coordinates, &renderables).join()
+        {
+            context.set(coordinate.x, coordinate.y, renderable.foreground_color, renderable.background_color, renderable.glyph);
         }
     }
 }
@@ -53,32 +60,32 @@ fn main() -> rltk::BError
 {
     use rltk::RltkBuilder;
 
-    const MAP_WIDTH: usize = 100;
-    const MAP_HEIGHT: usize = 80;
+    const MAP_WIDTH: usize = 50;
+    const MAP_HEIGHT: usize = 50;
+    const MAP_DEPTH: usize = 2;
 
     let mut context = RltkBuilder::simple(MAP_WIDTH, MAP_HEIGHT)
     .unwrap()
     .with_title("Roguelike Tutorial")
     .with_font("vga8x16.png", 8, 16)
-    .with_sparse_console(80, 30, "vga8x16.png")
+    .with_sparse_console(MAP_WIDTH, MAP_HEIGHT, "vga8x16.png")
     .with_vsync(false)
     .build()?;
 
     let mut game_state = State
     { 
         entity_system: World::new(),
-        map_width: MAP_WIDTH,
-        map_height: MAP_HEIGHT,
+        map_size: Coordinate{ x: MAP_WIDTH, y: MAP_HEIGHT, z: MAP_DEPTH },
     };
     
     register_components(&mut game_state);
 
-    game_state.entity_system.insert(new_map(game_state.map_width, game_state.map_height));
+    game_state.entity_system.insert(Map::new(game_state.map_size));
 
     //Test player
     game_state.entity_system.create_entity()
                             .with(Player{})
-                            .with(Position {x: 40, y: 25})
+                            .with(Coordinate { x: 40, y: 25, z: 0 })
                             .with(Renderable { glyph: rltk::to_cp437('@'), 
                                                  foreground_color: RGB::named(rltk::YELLOW), 
                                                  background_color: RGB::named(rltk::BLACK)})
@@ -91,18 +98,21 @@ fn main() -> rltk::BError
 fn try_move_player(delta_x: i32, delta_y: i32, game_state: &mut State)
 {
     
-    let mut positions = game_state.entity_system.write_storage::<Position>();
+    let mut coordinates = game_state.entity_system.write_storage::<Coordinate>();
     let mut players = game_state.entity_system.write_storage::<Player>();
-    let map = game_state.entity_system.fetch::<Vec<TileType>>();
-
-    for (_player, position) in (&mut players, &mut positions).join() 
+    let map = game_state.entity_system.fetch::<Map>();
+    
+    for (_player, coordinate) in (&mut players, &mut coordinates).join() 
     {
-        let target_index = cartesian_to_index(position.x + delta_x, position.y + delta_y, game_state.map_width);
-
-        if map[target_index] != TileType::Wall
+        let target_coordinate = Coordinate { x: (coordinate.x as i32 + delta_x) as usize, y: (coordinate.y as i32 + delta_y) as usize, z : coordinate.z};
+        match map.get(target_coordinate)
         {
-            position.x = min(game_state.map_width as i32 - 1 , max(0, position.x + delta_x));
-            position.y = min(game_state.map_height as i32 - 1, max(0, position.y + delta_y));
+            Some(tile) => if tile.passable
+            {
+                coordinate.x = min(game_state.map_size.x - 1 , max(0, target_coordinate.x));
+                coordinate.y = min(game_state.map_size.y - 1, max(0, target_coordinate.y));
+            }
+            None => (),
         }
     }
 }
@@ -122,38 +132,31 @@ fn player_input(game_state: &mut State, context: &mut Rltk)
     }
 }
 
-fn draw_map(map: &[TileType], map_width: &usize, context: &mut Rltk)
+fn draw_map(map: &Map, map_size: Coordinate, context: &mut Rltk, camera_z: usize)
 {
     let mut x = 0;
     let mut y = 0;
 
-    for tile in map.iter()
+    for x in 0..map_size.x
     {
-        match tile 
+        for y in 0..map_size.y
         {
-            TileType::Floor => 
+
+            let tile = map.tiles[x][y][camera_z];
+
+            match tile
             {
-                context.set(x, y, RGB::from_f32(0.5, 0.5, 0.5), RGB::from_f32(0., 0., 0.), rltk::to_cp437('.'));
-            }   
-            TileType::Wall => 
-            {
-                context.set(x, y, RGB::from_f32(0.5, 0.5, 0.5), RGB::from_f32(0., 0., 0.), rltk::to_cp437('#'));
+                Some(tile) => context.set(x, y, tile.foreground_color, tile.background_color, tile.glyph),
+                None => (),
             }
         }
-
-        x += 1;
-
-        if x > map_width - 1
-        {
-            x = 0;
-            y += 1;
-        }
     }
+    
 }
 
 fn register_components(game_state: &mut State)
 {
-    game_state.entity_system.register::<Position>();
+    game_state.entity_system.register::<Coordinate>();
     game_state.entity_system.register::<Renderable>();
     game_state.entity_system.register::<Player>();
 }

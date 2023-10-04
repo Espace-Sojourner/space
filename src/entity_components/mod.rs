@@ -5,11 +5,12 @@ use specs::prelude::*;
 
 
 //Position
-#[derive(Component)]
-pub struct Position
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Coordinate
 {
-    pub x: i32,
-    pub y: i32,
+    pub x: usize,
+    pub y: usize,
+    pub z: usize
 }
 
 //Renderable
