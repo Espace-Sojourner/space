@@ -1,13 +1,11 @@
 extern crate lib;
 use lib::entity_components::*;
-
+use lib::coordinate::Coordinate;
 use lib::map::Map;
 
-use lib::tile::MapTile;
-use rltk::{GameState, Rltk, RGB, VirtualKeyCode, Tile};
+use rltk::{GameState, Rltk, RGB, VirtualKeyCode};
 use specs::prelude::*;
 use std::cmp::{max, min};
-use specs_derive::Component;
 
 
 struct State 
@@ -60,11 +58,11 @@ fn main() -> rltk::BError
 {
     use rltk::RltkBuilder;
 
-    const MAP_WIDTH: usize = 50;
-    const MAP_HEIGHT: usize = 50;
+    const MAP_WIDTH: usize = 150;
+    const MAP_HEIGHT: usize = 100;
     const MAP_DEPTH: usize = 2;
 
-    let mut context = RltkBuilder::simple(MAP_WIDTH, MAP_HEIGHT)
+    let context = RltkBuilder::simple(MAP_WIDTH, MAP_HEIGHT)
     .unwrap()
     .with_title("Roguelike Tutorial")
     .with_font("vga8x16.png", 8, 16)
@@ -80,8 +78,7 @@ fn main() -> rltk::BError
     
     register_components(&mut game_state);
 
-    game_state.entity_system.insert(Map::new(game_state.map_size));
-
+    game_state.entity_system.insert(Map::rooms_and_corridors_map(20,5, 10, game_state.map_size));
     //Test player
     game_state.entity_system.create_entity()
                             .with(Player{})
@@ -112,7 +109,11 @@ fn try_move_player(delta_x: i32, delta_y: i32, game_state: &mut State)
                 coordinate.x = min(game_state.map_size.x - 1 , max(0, target_coordinate.x));
                 coordinate.y = min(game_state.map_size.y - 1, max(0, target_coordinate.y));
             }
-            None => (),
+            None => 
+            {
+                //coordinate.x = min(game_state.map_size.x - 1 , max(0, target_coordinate.x));
+                //coordinate.y = min(game_state.map_size.y - 1, max(0, target_coordinate.y));
+            }
         }
     }
 }
@@ -127,6 +128,10 @@ fn player_input(game_state: &mut State, context: &mut Rltk)
             VirtualKeyCode::Right => try_move_player(1, 0, game_state),
             VirtualKeyCode::Up => try_move_player(0, -1, game_state),
             VirtualKeyCode::Down => try_move_player(0, 1, game_state),
+            VirtualKeyCode::Home => try_move_player(-1, -1, game_state),
+            VirtualKeyCode::PageUp => try_move_player(1, -1, game_state),
+            VirtualKeyCode::PageDown => try_move_player(1, 1, game_state),
+            VirtualKeyCode::End => try_move_player(-1, 1, game_state),
             _ => {}
         },
     }
@@ -134,9 +139,6 @@ fn player_input(game_state: &mut State, context: &mut Rltk)
 
 fn draw_map(map: &Map, map_size: Coordinate, context: &mut Rltk, camera_z: usize)
 {
-    let mut x = 0;
-    let mut y = 0;
-
     for x in 0..map_size.x
     {
         for y in 0..map_size.y

@@ -1,4 +1,5 @@
 use rltk::RGB;
+use crate::coordinate::Coordinate;
 
 #[derive(Clone, Copy)]
 pub struct MapTile
@@ -20,5 +21,21 @@ impl MapTile
             background_color, 
             passable,
         }
+    }
+
+    pub fn get_neighbors(target_tile: Coordinate) -> Vec<Coordinate>
+    {
+        let mut neighbors: Vec<Coordinate> = Vec::new();
+
+        neighbors.push(Coordinate::new(target_tile.x - 1, target_tile.y - 1, target_tile.z));
+        neighbors.push(Coordinate::new(target_tile.x, target_tile.y - 1, target_tile.z));
+        neighbors.push(Coordinate::new(target_tile.x + 1, target_tile.y - 1, target_tile.z));
+        neighbors.push(Coordinate::new(target_tile.x, target_tile.y - 1, target_tile.z));
+        neighbors.push(Coordinate::new(target_tile.x, target_tile.y + 1, target_tile.z));
+        neighbors.push(Coordinate::new(target_tile.x + 1, target_tile.y + 1, target_tile.z));
+        neighbors.push(Coordinate::new(target_tile.x, target_tile.y + 1, target_tile.z));
+        neighbors.push(Coordinate::new(target_tile.x - 1, target_tile.y + 1, target_tile.z));
+
+        neighbors
     }
 }
