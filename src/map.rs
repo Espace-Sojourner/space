@@ -1,9 +1,9 @@
 use std::cmp::{min, max};
+use super::coordinate::Coordinate;
 
 use rand::Rng;
-use rltk::{RGB, Algorithm2D, Point, BaseMap};
+use rltk::{Rltk, RGB, Algorithm2D, Point, BaseMap};
 
-use super::coordinate::Coordinate;
 use super::rectangle::Rectangle;
 use super::map_tile::MapTile;
 
@@ -17,7 +17,7 @@ pub struct Map
 impl Map
 {
     /// Makes a map with solid boundries
-    pub fn new(map_size: Coordinate) -> Map
+    /*pub fn new(map_size: Coordinate) -> Map
     {
         let mut tiles: Vec<Vec<Vec<Option<MapTile>>>> = vec![vec![vec![None; map_size.z]; map_size.y]; map_size.x];
 
@@ -50,9 +50,9 @@ impl Map
         Map
         {
             tiles,
-            map_size
+            map_size,
         }
-    }
+    }*/
 
     /// Makes a map consisting of random rooms and corridors connecting them
     pub fn rooms_and_corridors_map(number_of_rooms: usize, min_room_size: usize, max_room_size: usize,  map_size: Coordinate) -> (Map,  Vec<Rectangle>)
@@ -141,6 +141,72 @@ impl Map
         else
         {
             None
+        }
+    }
+
+    pub fn set_tile(&mut self, coordinate: Coordinate, map_tile: MapTile)
+    {
+        self.tiles[coordinate.x][coordinate.y][coordinate.z] = Some(map_tile);
+    }
+
+    pub fn set_tile_visibility(&mut self, coordinate: Coordinate, visible: bool)
+    {
+        let target_tile = &mut self.tiles[coordinate.x][coordinate.y][coordinate.z];
+
+        match target_tile
+        {
+            Some(tile) => tile.visible = visible,
+            _ => {},
+        }
+    }
+
+    pub fn set_tile_revealed(&mut self, coordinate: Coordinate, revealed: bool)
+    {
+        let target_tile = &mut self.tiles[coordinate.x][coordinate.y][coordinate.z];
+
+        match target_tile
+        {
+            Some(tile) => tile.revealed = revealed,
+            _ => {},
+        }
+    }
+
+    pub fn reset_visibility(&mut self, z: usize)
+    {
+        for x in 0..self.tiles.len() - 1
+        {
+            for y in 0..self.tiles[x].len() - 1
+            {
+                self.set_tile_visibility(Coordinate { x, y, z}, false);      
+            }
+        }
+    }
+
+    pub fn draw(&self, context: &mut Rltk, camera_z: usize)
+    { 
+
+        for x in 0..self.tiles.len() - 1
+        {
+            for y in 0..self.tiles[x].len() - 1
+            {
+                let tile = self.tiles[x][y][camera_z];
+                
+                match tile
+                {
+                    Some(tile) if tile.revealed =>
+                    {
+                        if tile.visible
+                        {
+                            context.set(x, y, tile.foreground_color, tile.background_color, tile.glyph);
+                        }
+                        else
+                        {
+                            context.set(x, y, tile.foreground_color.to_greyscale(), tile.background_color.to_greyscale(), tile.glyph);
+                        }
+                    }
+                    _ => {}
+                }
+            } 
         }
     }
 }
@@ -237,7 +303,7 @@ fn add_room_to_map(room: &Rectangle, tiles: &mut Vec<Vec<Vec<Option<MapTile>>>>)
             tiles[x][y][room.corner_one.z] = Some(MapTile::new(rltk::to_cp437('.'), 
                                 RGB::from_f32(0.3, 0.3, 0.3),
                                 RGB::named(rltk::BLACK), 
-                                true, false));    
+                                true, false, false, false));    
         }
     }
 }
@@ -249,7 +315,7 @@ fn add_horizontal_corridor(origin: Coordinate, target: Coordinate, tiles: &mut V
         tiles[x][origin.y][origin.z] = Some(MapTile::new(rltk::to_cp437('.'), 
                             RGB::from_f32(0.3, 0.3, 0.3),
                             RGB::named(rltk::BLACK), 
-                            true, false)); 
+                            true, false, false, false)); 
     }
 }
 
@@ -260,7 +326,7 @@ fn add_vertical_corridor(origin: Coordinate, target: Coordinate, tiles: &mut Vec
         tiles[target.x][y][origin.z] = Some(MapTile::new(rltk::to_cp437('.'), 
                             RGB::from_f32(0.3, 0.3, 0.3),
                             RGB::named(rltk::BLACK), 
-                            true, false)); 
+                            true, false, false, false)); 
     }
 }
 
@@ -290,9 +356,9 @@ pub fn add_walls(map: &mut Map)
                                 None =>
                                 {
                                     map.tiles[coordinate.x][coordinate.y][coordinate.z] = Some(MapTile::new(rltk::to_cp437('#'), 
-                                    RGB::from_f32(0.5, 0.5, 0.5),
+                                    RGB::from_f32(0.5, 0.5, 0.8),
                                     RGB::named(rltk::BLACK), 
-                                    false, true)); 
+                                    false, true, false, false)); 
                                 }
                                 _ => (),
                             }
@@ -304,3 +370,4 @@ pub fn add_walls(map: &mut Map)
         }
     }
 }
+

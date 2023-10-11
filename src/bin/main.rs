@@ -3,7 +3,7 @@ use lib::{entity_components::*, visibility_system::VisibilitySystem, coordinate:
 
 use lib::map::Map;
 
-use rltk::{GameState, Rltk, RGB, VirtualKeyCode, Point};
+use rltk::{GameState, Rltk, RGB, VirtualKeyCode};
 use specs::prelude::*;
 use std::cmp::{max, min};
 
@@ -46,7 +46,8 @@ impl GameState for State
         }
         drop(players);
 
-        draw_map(&self.entity_system, context, camera_z);
+        let map = self.entity_system.fetch::<Map>();
+        map.draw(context, camera_z);
 
         for (coordinate, renderable) in (&coordinates, &renderables).join()
         {
@@ -90,7 +91,7 @@ fn main() -> rltk::BError
                             .with(Renderable { glyph: rltk::to_cp437('@'), 
                                                 foreground_color: RGB::named(rltk::YELLOW), 
                                                 background_color: RGB::named(rltk::BLACK)})
-                            .with(Viewshed { visible_tiles: Vec::new(), range: 8})
+                            .with(Viewshed { visible_tiles: Vec::new(), range: 18, dirty: true})
                             .build();
 
                         
@@ -102,9 +103,10 @@ fn try_move_player(delta_x: i32, delta_y: i32, game_state: &mut State)
     
     let mut coordinates = game_state.entity_system.write_storage::<Coordinate>();
     let mut players = game_state.entity_system.write_storage::<Player>();
+    let mut viewsheds = game_state.entity_system.write_storage::<Viewshed>();
     let map = game_state.entity_system.fetch::<Map>();
     
-    for (_player, coordinate) in (&mut players, &mut coordinates).join() 
+    for (_player, coordinate, viewshed) in (&mut players, &mut coordinates, &mut viewsheds).join() 
     {
         let target_coordinate = Coordinate { x: (coordinate.x as i32 + delta_x) as usize, y: (coordinate.y as i32 + delta_y) as usize, z : coordinate.z};
         match map.get(target_coordinate)
@@ -113,11 +115,14 @@ fn try_move_player(delta_x: i32, delta_y: i32, game_state: &mut State)
             {
                 coordinate.x = min(game_state.map_size.x - 1 , max(0, target_coordinate.x));
                 coordinate.y = min(game_state.map_size.y - 1, max(0, target_coordinate.y));
+                viewshed.dirty = true;
+                
             }
             None => 
             {
                 coordinate.x = min(game_state.map_size.x - 1 , max(0, target_coordinate.x));
                 coordinate.y = min(game_state.map_size.y - 1, max(0, target_coordinate.y));
+                viewshed.dirty = true;
             }
         }
     }
@@ -139,39 +144,6 @@ fn player_input(game_state: &mut State, context: &mut Rltk)
             VirtualKeyCode::End => try_move_player(-1, 1, game_state),
             _ => {}
         },
-    }
-}
-
-fn draw_map(entity_system: &World, context: &mut Rltk, camera_z: usize)
-{ 
-    let mut viewsheds = entity_system.write_storage::<Viewshed>();
-    let mut players = entity_system.write_storage::<Player>();
-    let map = entity_system.fetch::<Map>();
-
-    for (_players, viewshed) in (&mut players, &mut viewsheds).join()
-    {
-
-        for x in 0..map.tiles.len() - 1
-        {
-            for y in 0..map.tiles[x].len() - 1
-            {
-                let point = Point::new(x, y);
-
-                if viewshed.visible_tiles.contains(&point)
-                {
-                    let tile = map.tiles[x][y][camera_z];
-                    
-                    match tile
-                    {
-                        Some(tile) =>
-                        {
-                            context.set(x, y, tile.foreground_color, tile.background_color, tile.glyph);
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
     }
 }
 
